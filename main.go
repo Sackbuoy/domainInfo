@@ -61,13 +61,12 @@ func getDomainInfo(writer http.ResponseWriter, req *http.Request) {
     errResponse := ErrorResponse {
       Kind:      errorType,
       Code:      errorCode,
-      Message:   whoisErr.Error(),
+      Message:   errorMessage,
     }
 
     jsonResponse, err := json.Marshal(errResponse)
     if err != nil {
-      log.Println("Failed to format WHOIS fetch error as JSON")
-      writer.Write([]byte("500 - Internal Server Error"))
+      marshalJsonFailure(writer)
     }
 
     writer.Write(jsonResponse)
@@ -85,10 +84,7 @@ func getDomainInfo(writer http.ResponseWriter, req *http.Request) {
 
       jsonResponse, err := json.Marshal(errResponse)
       if err != nil {
-        writer.WriteHeader(http.StatusInternalServerError)
-        log.Println("Failed to format parse error as JSON")
-        writer.Header().Set("Content-Type", "text/plain")
-        writer.Write([]byte("500 - Internal Server Error"))
+        marshalJsonFailure(writer)
       }
 
       writer.Write(jsonResponse)
@@ -106,14 +102,18 @@ func getDomainInfo(writer http.ResponseWriter, req *http.Request) {
       writer.WriteHeader(http.StatusOK)
       jsonResponse, err := json.Marshal(response)
       if err != nil {
-        writer.WriteHeader(http.StatusInternalServerError)
-        log.Println("Failed to WHOIS response object as JSON")
-        writer.Header().Set("Content-Type", "text/plain")
-        writer.Write([]byte("500 - Internal Server Error"))
+        marshalJsonFailure(writer)
       }
 
       writer.Write(jsonResponse)
     }
+}
+
+func marshalJsonFailure(writer http.ResponseWriter) {
+  writer.WriteHeader(http.StatusInternalServerError)
+  log.Println("Failed to WHOIS response object as JSON")
+  writer.Header().Set("Content-Type", "text/plain")
+  writer.Write([]byte("500 - Internal Server Error"))
 }
 
 const rootPath = "/"

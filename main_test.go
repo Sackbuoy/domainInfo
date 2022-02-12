@@ -10,9 +10,34 @@ import (
   "bytes"
   "os"
   "strings"
+  "encoding/json"
+  "errors"
+  "strconv"
 )
 
-const baseURL = "http://0.0.0.0/domaininfo"
+var (
+  root          = fmt.Sprintf("http://0.0.0.0:%s", PORT)
+  domainInfoURL = fmt.Sprintf("%s/%s", root, "domaininfo")
+  jsonMarshal = json.Marshal
+)
+
+
+func TestRoot(t *testing.T) {
+  req, err := http.NewRequest("GET", root, nil)
+  if err != nil {
+    t.Fatal(err)
+  }
+
+  responseRecorder := httptest.NewRecorder()
+  handler := http.HandlerFunc(rootHandler)
+  handler.ServeHTTP(responseRecorder, req)
+
+  expected := "DomainInfo API application"
+  actual := responseRecorder.Body.String()
+  if (actual != expected) {
+    t.Fatal(formatExpectedVsActual(expected, actual))
+  }
+}
 
 
 // Happy path with a valid domain, and no error logs
@@ -26,7 +51,7 @@ func TestGetDomainInfo(t *testing.T) {
       log.SetOutput(os.Stderr)
   }()
 
-  response := sendRequest(domain, t)
+  response := sendDomainInfoRequest(domain, t)
   logOutput := logBuf.String()
 
   expected := 200
@@ -43,6 +68,8 @@ func TestGetDomainInfo(t *testing.T) {
 
 
 // Templated tests for nonexistent, malformatted, or empty/blank domain names
+// with a nonexistent domain name, it fails to parse the Whois response, 
+// with a blank/empty domain name, the whois request fails
 func TestBadDomain(t *testing.T) {
   var tests = []struct {
     domain string
@@ -64,7 +91,7 @@ func TestBadDomain(t *testing.T) {
           log.SetOutput(os.Stderr)
       }()
       
-      response := sendRequest(testTable.domain, t)
+      response := sendDomainInfoRequest(testTable.domain, t)
       logOutput := logBuf.String()
 
       expected := 400
@@ -80,6 +107,13 @@ func TestBadDomain(t *testing.T) {
   }
 }
 
+
+/* HELPER METHODS */
+
+func formatExpectedVsActual(expected string, actual string) (string) {
+  return fmt.Sprintf("Expected:\n  %s\nto equal:\n  %s", actual, expected)
+}
+
 func findExpectedMessage(domain string) (message string) {
   if strings.TrimSpace(domain) == "" {
     return "Domain cannot be empty"
@@ -90,12 +124,12 @@ func findExpectedMessage(domain string) (message string) {
 
 func checkLogOutput(expected string, actual string, t *testing.T) {
   if !strings.Contains(actual, expected) {
-    t.Fatal(fmt.Sprintf("Expected: \n %s to contain: \n %s", actual, expected))
+    t.Fatal(formatExpectedVsActual(expected, actual))
   }
 }
 
-func sendRequest(domain string, t *testing.T) *httptest.ResponseRecorder {
-  req, err := http.NewRequest("GET", baseURL, nil)
+func sendDomainInfoRequest(domain string, t *testing.T) *httptest.ResponseRecorder {
+  req, err := http.NewRequest("GET", domainInfoURL, nil)
   if err != nil {
     t.Fatal(err)
   }
@@ -111,9 +145,17 @@ func sendRequest(domain string, t *testing.T) *httptest.ResponseRecorder {
   return responseRecorder
 }
 
-func checkStatusCode(code int, expected int, t *testing.T) {
-  if code != expected {
-    errorMsg := fmt.Sprintf("Expected status code %d but got %d", expected, code)
+func checkStatusCode(actual int, expected int, t *testing.T) {
+  if actual != expected {
+    errorMsg := formatExpectedVsActual(strconv.Itoa(expected), strconv.Itoa(actual))
     t.Fatal(errorMsg)
   }
+}
+
+func fakemarshal(v interface{}) ([]byte, error) {
+    return []byte{}, errors.New("Marshalling failed")
+}
+
+func restoremarshal(replace func(v interface{}) ([]byte, error)) {
+    jsonMarshal = replace
 }
