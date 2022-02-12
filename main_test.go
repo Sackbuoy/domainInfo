@@ -30,7 +30,7 @@ func TestGetDomainInfo(t *testing.T) {
   logOutput := logBuf.String()
 
   expected := 200
-  checkStatusCode(response.Code, expected, t)F
+  checkStatusCode(response.Code, expected, t)
 
   if !(len(logOutput) == 0) {
     t.Fatal(fmt.Sprintf("Expected no log output but got %s", logOutput))

@@ -10,7 +10,7 @@ import (
   "encoding/json"
 )
 
-const PORT = ":8000"
+const PORT = ":8080"
 
 type Response struct {
   Status           []string `json:"status"`
