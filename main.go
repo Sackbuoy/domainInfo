@@ -29,6 +29,7 @@ type ErrorResponse struct {
 
 const getDomainInfoPath = "/domaininfo/{domain}"
 func getDomainInfo(writer http.ResponseWriter, req *http.Request) {
+  req.Header.Add("Accept-Charset","utf-8")
   vars := mux.Vars(req)
   domain := string(vars["domain"])
 
@@ -86,6 +87,7 @@ func getDomainInfo(writer http.ResponseWriter, req *http.Request) {
       if err != nil {
         writer.WriteHeader(http.StatusInternalServerError)
         log.Println("Failed to format parse error as JSON")
+        writer.Header().Set("Content-Type", "text/plain")
         writer.Write([]byte("500 - Internal Server Error"))
       }
 
@@ -106,6 +108,7 @@ func getDomainInfo(writer http.ResponseWriter, req *http.Request) {
       if err != nil {
         writer.WriteHeader(http.StatusInternalServerError)
         log.Println("Failed to WHOIS response object as JSON")
+        writer.Header().Set("Content-Type", "text/plain")
         writer.Write([]byte("500 - Internal Server Error"))
       }
 
@@ -115,6 +118,8 @@ func getDomainInfo(writer http.ResponseWriter, req *http.Request) {
 
 const rootPath = "/"
 func rootHandler(writer http.ResponseWriter, req *http.Request) {
+  req.Header.Add("Accept-Charset","utf-8")
+  writer.Header().Set("Content-Type", "text/plain")
   writer.Write([]byte("DomainInfo API application"))
 }
 
