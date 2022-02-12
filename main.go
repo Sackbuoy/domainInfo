@@ -113,10 +113,16 @@ func getDomainInfo(writer http.ResponseWriter, req *http.Request) {
     }
 }
 
+const rootPath = "/"
+func rootHandler(writer http.ResponseWriter, req *http.Request) {
+  writer.Write([]byte("DomainInfo API application"))
+}
+
 func main() {
   log.Println("Server Started")
   router := mux.NewRouter()
   router.HandleFunc(getDomainInfoPath, getDomainInfo).Methods("GET")
+  router.HandleFunc(rootPath, rootHandler).Methods("GET")
 
   log.Fatal(http.ListenAndServe(PORT, router))
 }
