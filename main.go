@@ -13,10 +13,10 @@ import (
 const PORT = ":8080"
 
 type Response struct {
-  Domain      DomainInfo `json:"domaininfo"`
+  Whois      WhoIsInfo `json:"whoisinfo"`
 }
 
-type DomainInfo struct {
+type WhoIsInfo struct {
   Status          []string `json:"status"`
   CreatedDate     string   `json:"created`
   ExpirationDate  string   `json:"expiry"`
@@ -25,7 +25,7 @@ type DomainInfo struct {
   ContactEmail    string   `json:"contactEmail"`
 }
 
-type DomainErrorResponse struct {
+type WhoIsError struct {
   Kind    string `json:"kind"`
   Code    int    `json:"code"`
   Message string `json:"message"`
@@ -38,32 +38,31 @@ func getDomainInfoHandler(writer http.ResponseWriter, req *http.Request) {
   vars := mux.Vars(req)
   domain := string(vars["domain"])
 
-  domainInfo, domainErr := getDomainInfo(writer, domain)
-  if domainErr != nil { // add checks for other domain info calls here
-    log.Println(domainErr.Message)
+  whoisInfo, whoisErr := getWhoIsInfo(domain)
+  if whoisErr != nil { // add checks for other domain info calls here
+    log.Println(whoisErr.Message)
 
-
-    jsonResponse, parseErr := json.Marshal(domainErr)
+    jsonResponse, parseErr := whoisErrToJson(*whoisErr)
     if parseErr != nil {
-      log.Fatal("Failed to parse WHOIS response object as JSON")
+      log.Println("Failed to parse WHOIS response object as JSON")
       internalServerError(writer, parseErr)
-    } 
-
-    switch domainErr.Code {
-    case 400:
-      writer.WriteHeader(http.StatusBadRequest) 
-      writer.Write(jsonResponse)
-    default:
-      writer.WriteHeader(http.StatusInternalServerError)
-      writer.Write(jsonResponse)
+    } else {
+      switch whoisErr.Code {
+      case 400:
+        writer.WriteHeader(http.StatusBadRequest) 
+        writer.Write(jsonResponse)
+      default:
+        writer.WriteHeader(http.StatusInternalServerError)
+        writer.Write(jsonResponse)
+      }
     }
 
   } else {
-    response := Response{Domain: *domainInfo}
+    response := Response{Whois: *whoisInfo}
 
-    jsonResponse, parseErr := json.Marshal(response)
+    jsonResponse, parseErr := responseToJson(response)
     if parseErr != nil {
-      log.Fatal("Failed to parse WHOIS response object as JSON")
+      log.Println("Failed to parse WHOIS response object as JSON")
       internalServerError(writer, parseErr)
     } else {
       writer.WriteHeader(http.StatusOK)
@@ -73,8 +72,8 @@ func getDomainInfoHandler(writer http.ResponseWriter, req *http.Request) {
 }
 
 
-func getDomainInfo(writer http.ResponseWriter, domain string) (*DomainInfo, *DomainErrorResponse) {
-  whoisResult, whoisErr := whois.Whois(domain)
+func getWhoIsInfo(domain string) (*WhoIsInfo, *WhoIsError) {
+  whoisResult, whoisErr := fetchWhoIs(domain)
   parsedResult, parseErr := whoisparser.Parse(whoisResult) 
 
   // check for error from whois
@@ -90,7 +89,7 @@ func getDomainInfo(writer http.ResponseWriter, domain string) (*DomainInfo, *Dom
       errorCode = 500
     }
 
-    errResponse := DomainErrorResponse {
+    errResponse := WhoIsError {
       Kind:      errorKind,
       Code:      errorCode,
       Message:   errorMessage,
@@ -102,7 +101,7 @@ func getDomainInfo(writer http.ResponseWriter, domain string) (*DomainInfo, *Dom
   // check for error from whois-parser
   if parseErr != nil {
     errorMessage := fmt.Sprintf("WHOIS parser with domain '%s' failed with error: %s", domain, parseErr.Error())
-    errResponse := DomainErrorResponse {
+    errResponse := WhoIsError {
       Kind:      "bad_request",
       Code:      400,
       Message:  errorMessage,
@@ -112,7 +111,7 @@ func getDomainInfo(writer http.ResponseWriter, domain string) (*DomainInfo, *Dom
   } 
 
   // no errors found,
-  response := DomainInfo {
+  response := WhoIsInfo {
     Status:         parsedResult.Domain.Status,
     CreatedDate:     parsedResult.Domain.CreatedDate,
     ExpirationDate: parsedResult.Domain.ExpirationDate,
@@ -121,12 +120,24 @@ func getDomainInfo(writer http.ResponseWriter, domain string) (*DomainInfo, *Dom
     ContactEmail:   parsedResult.Registrant.Email,
   }
 
-  return &response, nil
-    
+  return &response, nil 
+}
+
+// putting these functions in vars like this makes tesing a lot easier
+var fetchWhoIs = func(domain string) (string, error) {
+  return whois.Whois(domain)
+}
+
+var whoisErrToJson = func(err WhoIsError) ([]byte, error) {
+  return json.Marshal(err)
+}
+
+var responseToJson = func(resp Response) ([]byte, error) {
+  return json.Marshal(resp)
 }
 
 func internalServerError(writer http.ResponseWriter, err error) {
-  log.Fatal(err)
+  log.Println(err)
   writer.WriteHeader(http.StatusInternalServerError)
   writer.Header().Set("Content-Type", "text/plain")
   writer.Write([]byte("500 - Internal Server Error"))
@@ -142,6 +153,8 @@ func rootHandler(writer http.ResponseWriter, req *http.Request) {
 func main() {
   log.Println("Server Started")
   router := mux.NewRouter()
+
+  // Handlers
   router.HandleFunc(getDomainInfoPath, getDomainInfoHandler).Methods("GET")
   router.HandleFunc(rootPath, rootHandler).Methods("GET")
 

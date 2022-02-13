@@ -19,6 +19,11 @@ var (
   root          = fmt.Sprintf("http://0.0.0.0:%s", PORT)
   domainInfoURL = fmt.Sprintf("%s/%s", root, "domaininfo")
   jsonMarshal = json.Marshal
+
+  // store valid function calls so i can reset mocks later
+  validWhoisErrToJson = whoisErrToJson
+  validResponseToJson = responseToJson
+  validFetchWhoIs = fetchWhoIs
 )
 
 
@@ -42,7 +47,7 @@ func TestRoot(t *testing.T) {
 
 // Happy path with a valid domain, and no error logs
 func TestGetDomainInfo(t *testing.T) {
-  domain := "whoiswrapper.com"
+  domain := "goopy.us" // I own this domain, so I know it is valid
 
   // this is for suppressing log output and saving it to check later
   var logBuf bytes.Buffer
@@ -108,10 +113,117 @@ func TestBadDomain(t *testing.T) {
 }
 
 
+// test for when formatting an erroneous whois response as JSON failed(requires mocking json.marshal)
+func TestFailedToFormatErrAsJson(t *testing.T) {
+  domain := ""
+
+  // this is for suppressing log output and saving it to check later
+  var logBuf bytes.Buffer
+  log.SetOutput(&logBuf)
+  defer func() {
+      log.SetOutput(os.Stderr)
+  }()
+
+  // mocks the toJson variable, forcing it to return an error
+  whoisErrToJson = func(err WhoIsError) ([]byte, error) {
+    return nil, fmt.Errorf("marshal err")
+  }
+
+  response := sendDomainInfoRequest(domain, t)
+  logOutput := logBuf.String()
+
+  expected := 500
+  checkStatusCode(response.Code, expected, t)
+
+  expectedMessage := "Failed to parse WHOIS response object as JSON"
+  checkLogOutput(expectedMessage, logOutput, t)
+
+
+  expectedResponse := "500 - Internal Server Error"
+  actualResponse := response.Body.String()
+  if actualResponse != expectedResponse {
+    t.Fatal(formatExpectedVsActual(expectedResponse, actualResponse))
+  }
+
+  // reset mocks when im done
+  whoisErrToJson = validWhoisErrToJson
+}
+
+
+// test for when formatting a valid whois response as JSON failed(requires mocking json.marshal)
+func TestFailedToFormatResponseAsJson(t *testing.T) {
+  domain := "goopy.us"
+
+  // this is for suppressing log output and saving it to check later
+  var logBuf bytes.Buffer
+  log.SetOutput(&logBuf)
+  defer func() {
+      log.SetOutput(os.Stderr)
+  }()
+
+  responseToJson = func(resp Response) ([]byte, error) {
+    return nil, fmt.Errorf("marshal err")
+  }
+
+  response := sendDomainInfoRequest(domain, t)
+  logOutput := logBuf.String()
+
+  expected := 500
+  checkStatusCode(response.Code, expected, t)
+
+  expectedMessage := "Failed to parse WHOIS response object as JSON"
+  checkLogOutput(expectedMessage, logOutput, t)
+
+
+  expectedResponse := "500 - Internal Server Error"
+  actualResponse := response.Body.String()
+  if actualResponse != expectedResponse {
+    t.Fatal(formatExpectedVsActual(expectedResponse, actualResponse))
+  }
+
+  // reset mocks when im done
+  responseToJson = validResponseToJson
+}
+
+
+// test for when whois call failed for a non-user related reason
+func TestWhoisCallFailure(t *testing.T) {
+  domain := "goopy.us"
+
+  // this is for suppressing log output and saving it to check later
+  var logBuf bytes.Buffer
+  log.SetOutput(&logBuf)
+  defer func() {
+      log.SetOutput(os.Stderr)
+  }()
+
+  whoIsErrorMsg := "whois: no whois server found for domain" // this is the only other error it can throw
+
+  fetchWhoIs = func(domain string) (string, error) {
+    return "", errors.New("whois: no whois server found for domain")
+  }
+
+  response := sendDomainInfoRequest(domain, t)
+  logOutput := logBuf.String()
+
+  expected := 500
+  checkStatusCode(response.Code, expected, t)
+
+  checkLogOutput(whoIsErrorMsg, logOutput, t)
+
+  if response.Body == nil {
+    t.Fatal("Got no response body from WHOIS call")
+  }
+
+  // reset mocks when im done
+  fetchWhoIs = validFetchWhoIs
+}
+
+
 /* HELPER METHODS */
 
 func formatExpectedVsActual(expected string, actual string) (string) {
-  return fmt.Sprintf("\nExpected:\n  %sto contain:\n  %s\n", actual, expected)
+  return fmt.Sprintf("\nExpected:\n  %s\nto contain:\n  %s\n", actual, expected)
 }
 
 func findExpectedMessage(domain string) (message string) {
@@ -150,12 +262,4 @@ func checkStatusCode(actual int, expected int, t *testing.T) {
     errorMsg := formatExpectedVsActual(strconv.Itoa(expected), strconv.Itoa(actual))
     t.Fatal(errorMsg)
   }
-}
-
-func fakemarshal(v interface{}) ([]byte, error) {
-    return []byte{}, errors.New("Marshalling failed")
-}
-
-func restoremarshal(replace func(v interface{}) ([]byte, error)) {
-    jsonMarshal = replace
 }
