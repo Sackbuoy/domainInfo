@@ -111,14 +111,14 @@ func TestBadDomain(t *testing.T) {
 /* HELPER METHODS */
 
 func formatExpectedVsActual(expected string, actual string) (string) {
-  return fmt.Sprintf("Expected:\n  %s\nto equal:\n  %s", actual, expected)
+  return fmt.Sprintf("\nExpected:\n  %sto contain:\n  %s\n", actual, expected)
 }
 
 func findExpectedMessage(domain string) (message string) {
   if strings.TrimSpace(domain) == "" {
-    return "Domain cannot be empty"
+    return "whois: domain is empty" // this is copied directly from the whois output
   } else {
-    return fmt.Sprintf("Failed to parse WHOIS response for domain %s", domain)
+    return "whoisparser: domain whois data is invalid" // this is copied directly from the whois-parser output
   }
 }
 
@@ -140,7 +140,7 @@ func sendDomainInfoRequest(domain string, t *testing.T) *httptest.ResponseRecord
   req = mux.SetURLVars(req, vars)
 
   responseRecorder := httptest.NewRecorder()
-  handler := http.HandlerFunc(getDomainInfo)
+  handler := http.HandlerFunc(getDomainInfoHandler)
   handler.ServeHTTP(responseRecorder, req)
   return responseRecorder
 }
