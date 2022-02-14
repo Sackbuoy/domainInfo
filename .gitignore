@@ -3,5 +3,3 @@ domainInfo
 .terraform.lock.hcl
 .terraform/*
 coverage.out
-terraform.tfstate
-terraform.tfstate.backup

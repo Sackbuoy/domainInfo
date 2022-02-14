@@ -31,6 +31,8 @@ type WhoIsError struct {
   Message string `json:"message"`
 }
 
+// Handler for the "domaininfo/{domain}" path
+// This handler will call all information retrievers(e.g Whois)
 const getDomainInfoPath = "/domaininfo/{domain}"
 func getDomainInfoHandler(writer http.ResponseWriter, req *http.Request) {
   req.Header.Add("Accept-Charset","utf-8")
@@ -39,7 +41,7 @@ func getDomainInfoHandler(writer http.ResponseWriter, req *http.Request) {
   domain := string(vars["domain"])
 
   whoisInfo, whoisErr := getWhoIsInfo(domain)
-  if whoisErr != nil { // add checks for other domain info calls here
+  if whoisErr != nil { // check for errors from all retrievers here
     log.Println(whoisErr.Message)
 
     jsonResponse, parseErr := whoisErrToJson(*whoisErr)
@@ -72,6 +74,7 @@ func getDomainInfoHandler(writer http.ResponseWriter, req *http.Request) {
 }
 
 
+// Retriever for whois data
 func getWhoIsInfo(domain string) (*WhoIsInfo, *WhoIsError) {
   whoisResult, whoisErr := fetchWhoIs(domain)
   parsedResult, parseErr := whoisparser.Parse(whoisResult) 
